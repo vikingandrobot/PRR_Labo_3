@@ -21,7 +21,7 @@
                <execution>
                   <id>build-first</id>
                   <configuration>
-                     <mainClass>ch.heigvd.prr_labo03.MainApplication</mainClass>
+                     <mainClass>ch.heigvd.prr_labo03.Process</mainClass>
                      <attachToBuild>true</attachToBuild>
                      <classifier>onejar</classifier>
                      <filename>PRR_election_application.jar</filename>

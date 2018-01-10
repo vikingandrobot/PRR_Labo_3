@@ -55,11 +55,6 @@ public class Process {
          Election e3 = new Election(2, processes);
          Election e4 = new Election(3, processes);
          
-         new Thread(e1).start();
-         new Thread(e2).start();
-         new Thread(e3).start();
-         new Thread(e4).start();
-
          e1.startElection();
 
          Thread.sleep(1000);

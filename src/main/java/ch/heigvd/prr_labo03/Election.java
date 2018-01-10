@@ -15,9 +15,9 @@ import javafx.util.Pair;
 /**
  * Le gestionnaire d'élection
  */
-public class Election implements Runnable {
+public class Election {
 
-   private static final int REACHABLE_TIMEOUT = 8000;
+   private static final int RECEIPT_TIMEOUT = 8000;
 
    // Le numéro du site
    private final int idProcess;
@@ -25,72 +25,62 @@ public class Election implements Runnable {
    // Les sites de l'environnement réparti par adresse IP et port
    private final List<Pair<InetAddress, Integer>> processes;
 
-   private final Thread receive;
 
    public Election(int idProcess, List<Pair<InetAddress, Integer>> processes) {
       this.idProcess = idProcess;
       this.processes = new ArrayList<>(processes);
 
-      // TODO : Commentaire
-      this.receive = new Thread(new Runnable() {
+      // Implémentation pour recevoir les messages
+      new Thread(() -> {
 
-         private byte[] buf = new byte[256];
+         try (DatagramSocket socket = new DatagramSocket(
+                 processes.get(idProcess).getValue()
+         )) {
 
-         @Override
-         public void run() {
+            while (true) {
+               
+               // Adresse et port de l'émetteur
+               InetAddress address = null;
+               int port = 0;
 
-            try (DatagramSocket socket = new DatagramSocket(
-                    processes.get(idProcess).getValue()
-            )) {
-
-               while (true) {
+               // Réception de la liste
+               {
+                  byte[] buf = new byte[256];
                   DatagramPacket packet = new DatagramPacket(buf, buf.length);
                   socket.receive(packet);
+                  port = packet.getPort();
+                  address = packet.getAddress();
 
                   System.out.println(new String(packet.getData()));
                }
-            } catch (SocketException ex) {
-               Logger.getLogger(Election.class.getName())
-                       .log(Level.SEVERE, null, ex);
-            } catch (IOException ex) {
-               Logger.getLogger(Election.class.getName())
-                       .log(Level.SEVERE, null, ex);
+
+               // Envoie de la quittance
+               {
+                  String message = "Salut";
+                  byte[] buf = message.getBytes();
+                  DatagramPacket packet = new DatagramPacket(
+                          buf,
+                          buf.length,
+                          address,
+                          port
+                  );
+                  socket.send(packet);
+               }
             }
+         } catch (SocketException ex) {
+            Logger.getLogger(Election.class.getName())
+                    .log(Level.SEVERE, null, ex);
+         } catch (IOException ex) {
+            Logger.getLogger(Election.class.getName())
+                    .log(Level.SEVERE, null, ex);
          }
-      });
+      }).start();
    }
 
-   public synchronized void startElection() {
-      this.notify();
-   }
+   public void startElection() {
 
-   private synchronized void stopElection() {
-      try {
-         this.wait();
-      } catch (InterruptedException ex) {
-         Logger.getLogger(Election.class.getName())
-                 .log(Level.SEVERE, null, ex);
-      }
-   }
-
-   private void aptitude() {
-
-   }
-
-   public void elected() {
-
-   }
-
-   @Override
-   public void run() {
-
-      this.receive.start();
-
-      while (true) {
-
-         // Attente d'une nouvelle élection
-         stopElection();
-
+      // Implémentation pour lancer l'élection
+      new Thread(() -> {
          System.out.println("Election en cours");
 
          // Récupère le voisin suivant
@@ -98,9 +88,10 @@ public class Election implements Runnable {
 
          try (DatagramSocket socket = new DatagramSocket()) {
 
-            socket.setSoTimeout(10000);
+            // Configure l'attente pour la quittance
+            socket.setSoTimeout(RECEIPT_TIMEOUT);
 
-            // Envoie de la liste complété au voisin
+            // Envoie de la liste complétée au voisin
             {
                String message = "Salut";
                byte[] buf = message.getBytes();
@@ -118,6 +109,7 @@ public class Election implements Runnable {
                byte[] buf = new byte[256];
                DatagramPacket packet = new DatagramPacket(buf, buf.length);
                socket.receive(packet);
+               System.out.println("Quittance reçue");
             }
 
          } catch (SocketTimeoutException ex) {
@@ -130,7 +122,14 @@ public class Election implements Runnable {
             Logger.getLogger(Election.class.getName())
                     .log(Level.SEVERE, null, ex);
          }
+      }).start();
+   }
 
-      }
+   private void aptitude() {
+
+   }
+
+   public void elected() {
+
    }
 }
