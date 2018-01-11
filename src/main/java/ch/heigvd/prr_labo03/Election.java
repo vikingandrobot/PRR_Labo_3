@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Observable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.util.Pair;
@@ -17,7 +18,7 @@ import javafx.util.Pair;
 /**
  * Le gestionnaire d'élection
  */
-public class Election {
+public class Election extends Observable {
    
    public enum Protocol {
       ANNOUNCEMENT(0),

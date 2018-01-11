@@ -34,6 +34,7 @@ public class Applicatif implements Observer {
    public Applicatif(Election election, int idProcess, List<Pair<InetAddress, Integer>> processes) throws SocketException {
 
       this.election = election;
+      election.addObserver(this);
 
       this.idProcess = idProcess;
       
