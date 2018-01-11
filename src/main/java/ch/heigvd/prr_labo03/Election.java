@@ -6,7 +6,9 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,13 +26,19 @@ public class Election {
 
    // Les sites de l'environnement réparti par adresse IP et port
    private final List<Pair<InetAddress, Integer>> processes;
-
+   
 
    public Election(int idProcess, List<Pair<InetAddress, Integer>> processes) {
       this.idProcess = idProcess;
       this.processes = new ArrayList<>(processes);
 
-      // Implémentation pour recevoir les messages
+      /**
+       * Ce thread reçoit les annonces et les traites. Pour le premier passage
+       * de l'anneau, on s'ajoute à la liste et on s'annonce au voisin suivant.
+       * 
+       * Puis au deuxième passage, on détermine l'élu et on passe à la dernière
+       * étape qui consiste à communiquer le résultat à tout le monde.
+       */
       new Thread(() -> {
 
          try (DatagramSocket socket = new DatagramSocket(
@@ -38,25 +46,61 @@ public class Election {
          )) {
 
             while (true) {
-               
+
                // Adresse et port de l'émetteur
-               InetAddress address = null;
-               int port = 0;
+               InetAddress address;
+               int port;
 
                // Réception de la liste
                {
                   byte[] buf = new byte[256];
                   DatagramPacket packet = new DatagramPacket(buf, buf.length);
                   socket.receive(packet);
+
+                  // Récupère l'adresse et port de l'émetteur
                   port = packet.getPort();
                   address = packet.getAddress();
 
-                  System.out.println(new String(packet.getData()));
+                  ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
+
+                  List<Pair<Integer, Integer>> aptitudePerProcess = new ArrayList<>();
+
+                  boolean inList = false;
+                  
+                  // Parcours la liste
+                  int nbProcesses = buffer.getInt(0);
+                  for (int i = 1; i <= nbProcesses; i++) {
+                     int no = buffer.getInt(i * 4);
+                     int apt = buffer.getInt((i + 1) * 4);
+                     
+                     aptitudePerProcess.add(new Pair<>(no, apt));
+                     
+                     // Vérifie que le site courant est dans la liste
+                     if(no == idProcess) {
+                        inList = true;
+                     }
+                  }
+                  
+
+                  if(inList) {
+                     // TODO : Si c'est le deuxième passage, déterminer l'identité de l'élu ... Plus grande aptitude et en cas d'égalité, plus petite IP
+                     // Si c'est moi, arrêter d'envoyer la liste et envoyer le résultat (Donc il faut mettre en place un protocol ...)
+
+                     // TODO : Si c'est le toisième passage, supprimer le site en panne (Celui qui est élu normalement)
+                     // Trouver un moyen de savoir si c'est le troisième cycle. Boolean interne ?
+                  }
+                  else {
+                     // Si le site courant n'est pas dans la liste, ajouter
+                     aptitudePerProcess.add(new Pair<>(idProcess, aptitude()));
+                     
+                     // Et announcement au prochain voisin
+                     announcement(aptitudePerProcess);
+                  }
                }
 
                // Envoie de la quittance
                {
-                  String message = "Salut";
+                  String message = "RECEIPT";
                   byte[] buf = message.getBytes();
                   DatagramPacket packet = new DatagramPacket(
                           buf,
@@ -77,59 +121,92 @@ public class Election {
       }).start();
    }
 
+   /**
+    * Démarre une nouvelle élection
+    */
    public void startElection() {
-
       // Implémentation pour lancer l'élection
       new Thread(() -> {
-         System.out.println("Election en cours");
+         System.out.println("Démarre l'élection");
 
-         // Récupère le voisin suivant
-         int neighbour = idProcess + 1 % processes.size();
-
-         try (DatagramSocket socket = new DatagramSocket()) {
-
-            // Configure l'attente pour la quittance
-            socket.setSoTimeout(RECEIPT_TIMEOUT);
-
-            // Envoie de la liste complétée au voisin
-            {
-               String message = "Salut";
-               byte[] buf = message.getBytes();
-               DatagramPacket packet = new DatagramPacket(
-                       buf,
-                       buf.length,
-                       processes.get(neighbour).getKey(),
-                       processes.get(neighbour).getValue()
-               );
-               socket.send(packet);
-            }
-
-            // Attente de la quittance
-            {
-               byte[] buf = new byte[256];
-               DatagramPacket packet = new DatagramPacket(buf, buf.length);
-               socket.receive(packet);
-               System.out.println("Quittance reçue");
-            }
-
-         } catch (SocketTimeoutException ex) {
-            // Erreur
-
-         } catch (SocketException ex) {
-            Logger.getLogger(Election.class.getName())
-                    .log(Level.SEVERE, null, ex);
-         } catch (IOException ex) {
-            Logger.getLogger(Election.class.getName())
-                    .log(Level.SEVERE, null, ex);
-         }
+         // S'annonce avec son numéro et son aptitude
+         announcement(Arrays.asList(new Pair<>(idProcess, aptitude())));
       }).start();
    }
 
-   private void aptitude() {
+   
+   /**
+    * Effectue une annonce auprès d'un voisin. Si le voisin est inatteignable,
+    * les voisins suivants sont sollicités.
+    *
+    * @param aptitudePerProcess Liste des sites participant à l'élection. Chaque
+    * site est couplé de son aptitude. Pair<No, Aptitude>
+    */
+   private void announcement(List<Pair<Integer, Integer>> aptitudePerProcess) {
+      // Récupère le voisin suivant
+      int neighbour = (idProcess + 1) % processes.size();
 
+      try (DatagramSocket socket = new DatagramSocket()) {
+
+         // Configure l'attente pour la quittance
+         socket.setSoTimeout(RECEIPT_TIMEOUT);
+
+         // Envoie de la liste complétée au voisin
+         {
+            ByteBuffer buffer = ByteBuffer.allocate(36);
+            buffer.putInt(aptitudePerProcess.size());
+
+            aptitudePerProcess.forEach((s) -> {
+               buffer.putInt(s.getKey());
+               buffer.putInt(s.getValue());
+            });
+
+            byte[] data = buffer.array();
+            DatagramPacket packet = new DatagramPacket(
+                    data,
+                    data.length,
+                    processes.get(neighbour).getKey(),
+                    processes.get(neighbour).getValue()
+            );
+            socket.send(packet);
+         }
+
+         // Attente de la quittance
+         {
+            byte[] buf = new byte[256];
+            DatagramPacket packet = new DatagramPacket(buf, buf.length);
+            socket.receive(packet);
+            System.out.println("Quittance reçue");
+         }
+
+      } catch (SocketTimeoutException ex) {
+         // TODO : Essayer avec le prochain voisin
+      } catch (SocketException ex) {
+         Logger.getLogger(Election.class.getName())
+                 .log(Level.SEVERE, null, ex);
+      } catch (IOException ex) {
+         Logger.getLogger(Election.class.getName())
+                 .log(Level.SEVERE, null, ex);
+      }
    }
 
-   public void elected() {
+   
+   /**
+    * Retourne l'aptitude du site. Ce dernier est calculé à l'aide du dernier
+    * octet de l'adresse IP + le numéro de port.
+    *
+    * @return Retourne l'aptitude du site.
+    */
+   private int aptitude() {
+      // TODO : Calculer l'aptitude avec le dernier octet de l'IP + port
+      return 10;
+   }
 
+   
+   /**
+    * Retourne l'élu
+    */
+   public void elected() {
+      // TODO : Retourner l'élu
    }
 }
