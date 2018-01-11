@@ -15,25 +15,41 @@ import javafx.util.Pair;
 
 /**
  * Cette classe se charge de tester périodiquement que l'élu est vivant et de
- * lancer une exception si ce n'est pas le cas
+ * lancer une exception si ce n'est pas le cas.
+ * 
+ * Il faut appeler la méthode start pour commencer l'applicatif.
+ * 
+ * Cette classe commence par lancer une élection, puis attend le résultat. Une fois
+ * le résultat connu, elle demande à l'élu s'il est en vie. 
+ * 
+ * Si ce n'est pas le cas, elle relance une élection. et ainsi de suite. 
+ *
+ * Elle effectue cette action toutes les 5 secondes.
  */
 public class Applicatif implements Observer {
-
+   
+   // Election object to use
    private Election election;
 
+   // Id of the current process
    private int idProcess;
 
+   // Socket pour recevoir des demandes de vie
    private DatagramSocket receiveSocket;
    
+   // Socket pour envoyer des demandes de vie
    private DatagramSocket sendSocket;
-
+   
+   // Thread pour recevoir des demandes de vie
    private Thread receiveThread;
    
+   // Liste des process et de leurs adresses
    private List<Pair<InetAddress, Integer>> processes;
 
    public Applicatif(Election election, int idProcess, List<Pair<InetAddress, Integer>> processes) throws SocketException {
 
       this.election = election;
+      election.addObserver(this);
 
       this.idProcess = idProcess;
       
