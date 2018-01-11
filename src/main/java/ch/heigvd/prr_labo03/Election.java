@@ -223,8 +223,12 @@ public class Election {
     * @return Retourne l'aptitude du site.
     */
    private int aptitude() {
-      // TODO : Calculer l'aptitude avec le dernier octet de l'IP + port
-      return 10;
+      
+      Pair<InetAddress, Integer> address = processes.get(idProcess);
+      byte[] addressBytes = address.getKey().getAddress();
+      
+      
+      return (int) addressBytes[3] + (int) address.getValue();
    }
 
    
