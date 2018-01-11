@@ -56,18 +56,14 @@ public class Process {
 
    public static void main(String[] args) throws InterruptedException {
       
-      int id = -1;
-      
       if (args.length != 1) {
          System.out.println("Le programme doit recevoir en paramètre son ID de site"
                  + " (0 à 3).");
          System.out.println("Lance le programme : java -jar <nom_application_jar> <id_du_site>");
-         //System.exit(1);
-         id = 0;
+         System.exit(1);
       }
       
-      if (id < 0)
-         id = Integer.parseInt(args[0]);
+      int id = Integer.parseInt(args[0]);
       
       if (id < 0 || id > 3) {
          System.out.println("Erreur: l'ID de site doit être dans l'intervalle doit être "
@@ -80,14 +76,11 @@ public class Process {
       try {
          List<Pair<InetAddress, Integer>> processes = readProcessesAddresses(fileName);
          
-         Election e1 = new Election(0, processes);
-         Election e2 = new Election(1, processes);
-         Election e3 = new Election(2, processes);
-         Election e4 = new Election(3, processes);
+         Election e1 = new Election(id, processes);
          
-         e1.startElection();
-
-         Thread.sleep(1000);
+         Applicatif applicatif = new Applicatif(e1, id, processes);
+         
+         applicatif.start();
          
       } catch (Exception ex) {
          
