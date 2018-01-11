@@ -235,7 +235,7 @@ public class Election {
    /**
     * Retourne l'élu
     */
-   public void elected() {
-      // TODO : Retourner l'élu
+   public synchronized int elected() {
+      return 0;
    }
 }
