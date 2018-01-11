@@ -47,6 +47,9 @@ public class Election {
    // Les sites de l'environnement réparti par adresse IP et port
    private final List<Pair<InetAddress, Integer>> processes;
    
+   
+   private int coordinator;
+   
 
    
    public Election(int idProcess, List<Pair<InetAddress, Integer>> processes) {
@@ -138,9 +141,10 @@ public class Election {
                            eluAptitude = s.getValue();
                         }
                      }
-                     
+ 
                      if(elu == idProcess) {
-                        // result
+                        coordinator = idProcess;
+                        result(coordinator);
                      }
                      
 
@@ -156,7 +160,7 @@ public class Election {
                   }
                }
                else if(protocol == Protocol.RESULT.code()) {
-               
+                  
                }
 
             }
@@ -213,6 +217,56 @@ public class Election {
                buffer.putInt(s.getKey());
                buffer.putInt(s.getValue());
             });
+
+            byte[] data = buffer.array();
+            DatagramPacket packet = new DatagramPacket(
+                    data,
+                    data.length,
+                    processes.get(neighbour).getKey(),
+                    processes.get(neighbour).getValue()
+            );
+            socket.send(packet);
+         }
+
+         // Attente de la quittance
+         {
+            byte[] buf = new byte[256];
+            DatagramPacket packet = new DatagramPacket(buf, buf.length);
+            socket.receive(packet);
+            System.out.println("Quittance reçue");
+         }
+
+      } catch (SocketTimeoutException ex) {
+         // TODO : Essayer avec le prochain voisin
+      } catch (SocketException ex) {
+         Logger.getLogger(Election.class.getName())
+                 .log(Level.SEVERE, null, ex);
+      } catch (IOException ex) {
+         Logger.getLogger(Election.class.getName())
+                 .log(Level.SEVERE, null, ex);
+      }
+   }
+   
+   
+   
+   /**
+    * Envoie le résultat de l'election
+    * @param c L'élu
+    */
+   private void result(int c) {
+      // Récupère le voisin suivant
+      int neighbour = (idProcess + 1) % processes.size();
+
+      try (DatagramSocket socket = new DatagramSocket()) {
+
+         // Configure l'attente pour la quittance
+         socket.setSoTimeout(RECEIPT_TIMEOUT);
+
+         // Envoie de la liste complétée au voisin
+         {
+            ByteBuffer buffer = ByteBuffer.allocate(40);
+            buffer.putInt(Protocol.RESULT.code());
+            buffer.putInt(c);
 
             byte[] data = buffer.array();
             DatagramPacket packet = new DatagramPacket(
