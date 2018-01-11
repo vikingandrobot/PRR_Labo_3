@@ -18,6 +18,21 @@ import javafx.util.Pair;
  * Le gestionnaire d'élection
  */
 public class Election {
+   
+   public enum Protocol {
+      ANNOUNCEMENT(0),
+      RECEIPT(1);
+      
+      private final int code;
+      
+      private Protocol(int code) {
+         this.code = code;
+      }
+      
+      public int code() {
+         return code;
+      }
+   };
 
    private static final int RECEIPT_TIMEOUT = 8000;
 
@@ -52,35 +67,53 @@ public class Election {
                int port;
 
                // Réception de la liste
-               {
-                  byte[] buf = new byte[256];
-                  DatagramPacket packet = new DatagramPacket(buf, buf.length);
-                  socket.receive(packet);
 
-                  // Récupère l'adresse et port de l'émetteur
-                  port = packet.getPort();
-                  address = packet.getAddress();
+               byte[] buf = new byte[256];
+               DatagramPacket packet = new DatagramPacket(buf, buf.length);
+               socket.receive(packet);
 
-                  ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
+               // Récupère l'adresse et port de l'émetteur
+               port = packet.getPort();
+               address = packet.getAddress();
+               
+               System.out.println("Annonce recu par le site " + idProcess);
+               
+               // Envoie de la quittance
+               String message = "RECEIPT";
+               byte[] data = message.getBytes();
 
+               socket.send(new DatagramPacket(
+                       data,
+                       data.length,
+                       address,
+                       port
+               ));
+
+               ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
+
+               int protocol = buffer.getInt(0);
+
+               // Si c'est une annonce
+               if(protocol == Protocol.ANNOUNCEMENT.code()) {
                   List<Pair<Integer, Integer>> aptitudePerProcess = new ArrayList<>();
 
                   boolean inList = false;
-                  
+
                   // Parcours la liste
-                  int nbProcesses = buffer.getInt(0);
-                  for (int i = 1; i <= nbProcesses; i++) {
-                     int no = buffer.getInt(i * 4);
-                     int apt = buffer.getInt((i + 1) * 4);
+                  int nbProcesses = buffer.getInt(1 * 4);
+                  for (int i = 0; i < nbProcesses; i++) {
+                     int no = buffer.getInt((i + 2) * 4);
+                     int apt = buffer.getInt((i + 2 + 1) * 4);
                      
+                     System.out.println(no + " " + apt);
+
                      aptitudePerProcess.add(new Pair<>(no, apt));
-                     
+
                      // Vérifie que le site courant est dans la liste
                      if(no == idProcess) {
                         inList = true;
                      }
                   }
-                  
 
                   if(inList) {
                      // TODO : Si c'est le deuxième passage, déterminer l'identité de l'élu ... Plus grande aptitude et en cas d'égalité, plus petite IP
@@ -92,24 +125,12 @@ public class Election {
                   else {
                      // Si le site courant n'est pas dans la liste, ajouter
                      aptitudePerProcess.add(new Pair<>(idProcess, aptitude()));
-                     
+
                      // Et announcement au prochain voisin
                      announcement(aptitudePerProcess);
                   }
                }
 
-               // Envoie de la quittance
-               {
-                  String message = "RECEIPT";
-                  byte[] buf = message.getBytes();
-                  DatagramPacket packet = new DatagramPacket(
-                          buf,
-                          buf.length,
-                          address,
-                          port
-                  );
-                  socket.send(packet);
-               }
             }
          } catch (SocketException ex) {
             Logger.getLogger(Election.class.getName())
@@ -143,6 +164,9 @@ public class Election {
     * site est couplé de son aptitude. Pair<No, Aptitude>
     */
    private void announcement(List<Pair<Integer, Integer>> aptitudePerProcess) {
+      
+      System.out.println("Le site " + idProcess + " s'annonce");
+      
       // Récupère le voisin suivant
       int neighbour = (idProcess + 1) % processes.size();
 
@@ -153,7 +177,8 @@ public class Election {
 
          // Envoie de la liste complétée au voisin
          {
-            ByteBuffer buffer = ByteBuffer.allocate(36);
+            ByteBuffer buffer = ByteBuffer.allocate(40);
+            buffer.putInt(Protocol.ANNOUNCEMENT.code());
             buffer.putInt(aptitudePerProcess.size());
 
             aptitudePerProcess.forEach((s) -> {
