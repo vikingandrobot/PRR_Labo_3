@@ -19,9 +19,13 @@ import javafx.util.Pair;
  */
 public class Election {
    
+   /**
+    * Protocol utilisé pour les paquets à envoyer
+    */
    public enum Protocol {
       ANNOUNCEMENT(0),
-      RECEIPT(1);
+      RECEIPT(1),
+      RESULT(2);
       
       private final int code;
       
@@ -34,6 +38,7 @@ public class Election {
       }
    };
 
+   // Temps d'attente avant de définir qu'une machine est HS
    private static final int RECEIPT_TIMEOUT = 8000;
 
    // Le numéro du site
@@ -43,6 +48,7 @@ public class Election {
    private final List<Pair<InetAddress, Integer>> processes;
    
 
+   
    public Election(int idProcess, List<Pair<InetAddress, Integer>> processes) {
       this.idProcess = idProcess;
       this.processes = new ArrayList<>(processes);
@@ -118,6 +124,25 @@ public class Election {
                   if(inList) {
                      // TODO : Si c'est le deuxième passage, déterminer l'identité de l'élu ... Plus grande aptitude et en cas d'égalité, plus petite IP
                      // Si c'est moi, arrêter d'envoyer la liste et envoyer le résultat (Donc il faut mettre en place un protocol ...)
+                     int elu = idProcess;
+                     int eluAptitude = aptitude();
+                     for(int i = 0; i < aptitudePerProcess.size(); i++) {
+                        
+                        Pair<Integer, Integer> s = aptitudePerProcess.get(i);
+
+                        //int a = ByteBuffer.wrap(processes.get(s.getKey()).getKey().getAddress()).getInt();
+                        //int b = ByteBuffer.wrap(processes.get(idProcess).getKey().getAddress()).getInt();
+                        
+                        if(s.getValue() > eluAptitude) {
+                           elu = s.getKey();
+                           eluAptitude = s.getValue();
+                        }
+                     }
+                     
+                     if(elu == idProcess) {
+                        // result
+                     }
+                     
 
                      // TODO : Si c'est le toisième passage, supprimer le site en panne (Celui qui est élu normalement)
                      // Trouver un moyen de savoir si c'est le troisième cycle. Boolean interne ?
@@ -129,6 +154,9 @@ public class Election {
                      // Et announcement au prochain voisin
                      announcement(aptitudePerProcess);
                   }
+               }
+               else if(protocol == Protocol.RESULT.code()) {
+               
                }
 
             }
